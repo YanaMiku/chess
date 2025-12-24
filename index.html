@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Chess Pro - Click-to-Move & Hints</title>
+    
+    <!-- Library CSS -->
+    <link rel="stylesheet"
+      href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css"
+      crossorigin="anonymous">
+    
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --bg-color: #ecf0f1;
+            --card-bg: #ffffff;
+            --brilliant: #1ba5d0;
+            --great: #5c8d4d;
+            --good: #95bb4a;
+            --mistake: #e6912c;
+            --blunder: #b33430;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Overlay Pengaturan Awal */
+        #setup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(44, 62, 80, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }
+
+        .setup-card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .setup-card h2 {
+            margin-top: 0;
+            color: var(--primary-color);
+            text-align: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+            padding: 20px;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .game-layout {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            width: 100%;
+        }
+
+        #myBoard {
+            width: 450px;
+            max-width: 90vw;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+
+        /* Style untuk Hint Gerakan */
+        .highlight-hint {
+            box-shadow: inset 0 0 3px 3px rgba(0, 0, 0, .2);
+            border-radius: 50%;
+        }
+        
+        .highlight-square {
+            box-shadow: inset 0 0 3px 3px yellow;
+        }
+
+        .controls {
+            flex: 1;
+            min-width: 320px;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .timer-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .timer {
+            flex: 1;
+            padding: 10px;
+            background: #2c3e50;
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .timer.active {
+            background: #27ae60;
+            box-shadow: 0 0 10px rgba(39, 174, 96, 0.5);
+        }
+
+        .status-box {
+            padding: 12px;
+            background: #f8f9fa;
+            border-left: 5px solid var(--accent-color);
+            border-radius: 4px;
+        }
+
+        #move-eval {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            font-size: 0.8rem;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        label { font-weight: bold; font-size: 0.9rem; color: #555; }
+
+        select, button {
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 1rem;
+        }
+
+        button {
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            border: none;
+        }
+
+        .btn-start {
+            background: #27ae60;
+            color: white;
+            width: 100%;
+            font-size: 1.2rem;
+            margin-top: 10px;
+        }
+        .btn-start:hover { background: #219150; }
+
+        .btn-reset { background: #e74c3c; color: white; }
+        .btn-undo { background: #95a5a6; color: white; }
+
+        @media (max-width: 600px) { #myBoard { width: 100%; } }
+    </style>
+</head>
+<body>
+
+    <!-- Overlay Pengaturan -->
+    <div id="setup-overlay">
+        <div class="setup-card">
+            <h2>Chess Settings</h2>
+            
+            <div class="setting-group">
+                <label>Bermain Sebagai:</label>
+                <select id="playerColor">
+                    <option value="w">Putih (Jalan Pertama)</option>
+                    <option value="b">Hitam</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <label>Mode Permainan:</label>
+                <select id="gameMode">
+                    <option value="vsAI">Player vs Computer (AI)</option>
+                    <option value="multiplayer">Local Multiplayer</option>
+                </select>
+            </div>
+
+            <div class="setting-group" id="difficulty-setup">
+                <label>Tingkat Kesulitan AI:</label>
+                <select id="difficulty">
+                    <option value="easy">Easy (Skill 0)</option>
+                    <option value="medium" selected>Medium (Skill 10)</option>
+                    <option value="hard">Hard (Skill 20)</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <label>Kontrol Waktu:</label>
+                <select id="timeControl">
+                    <option value="none">Tanpa Waktu</option>
+                    <option value="60">1 Menit (Bullet)</option>
+                    <option value="180">3 Menit (Blitz)</option>
+                    <option value="300">5 Menit (Blitz)</option>
+                    <option value="600">10 Menit (Rapid)</option>
+                </select>
+            </div>
+
+            <button class="btn-start" id="startGameBtn">START GAME</button>
+        </div>
+    </div>
+
+    <!-- Konten Utama Permainan -->
+    <div class="container" id="main-container">
+        <h1>Master Chess Pro</h1>
+
+        <div class="game-layout">
+            <div id="board-wrapper">
+                <div class="timer-container">
+                    <div id="timer-black" class="timer">00:00</div>
+                    <div id="timer-white" class="timer active">00:00</div>
+                </div>
+                <div id="myBoard"></div>
+            </div>
+
+            <div class="controls">
+                <div class="status-box">
+                    <div id="status">Menunggu awal permainan...</div>
+                    <div id="move-eval">Good Move</div>
+                </div>
+
+                <div id="active-settings" style="font-size: 0.85rem; color: #666; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                    <!-- Info setting aktif -->
+                </div>
+
+                <div class="button-group" style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="btn-undo" id="undoBtn">Undo</button>
+                    <button class="btn-reset" id="resetBtn">Settings / Reset</button>
+                </div>
+
+                <div id="pgn-container" style="font-size: 0.75rem; color: #777;">
+                    <strong>PGN:</strong>
+                    <div id="pgn" style="max-height: 80px; overflow-y: auto; background: #eee; padding: 8px; border-radius: 4px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+    <script>
+        var board = null;
+        var game = new Chess();
+        var stockfish = null;
+        var lastEval = 0;
+        
+        var timerInterval = null;
+        var timeLeft = { w: 0, b: 0 };
+        var useTimer = false;
+
+        // Variables untuk Click-to-Move
+        var squareSelected = null;
+
+        // Inisialisasi Stockfish
+        async function initStockfish() {
+            try {
+                const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+                const script = await response.text();
+                const blob = new Blob([script], { type: 'application/javascript' });
+                stockfish = new Worker(URL.createObjectURL(blob));
+
+                stockfish.onmessage = function(event) {
+                    const line = event.data;
+                    if (line.includes('score cp') || line.includes('score mate')) handleEvaluation(line);
+                    if (line.indexOf('bestmove') > -1 && $('#gameMode').val() === 'vsAI') {
+                        const moveMatch = line.match(/bestmove\s([a-h][1-8][a-h][1-8][qrbn]?)/);
+                        if (moveMatch && game.turn() !== $('#playerColor').val()) {
+                            makeMove(moveMatch[1]);
+                        }
+                    }
+                };
+            } catch (e) { console.error("Stockfish load error", e); }
+        }
+
+        function handleEvaluation(line) {
+            let score = 0;
+            const scoreMatch = line.match(/score cp (-?\d+)/);
+            if (scoreMatch) score = parseInt(scoreMatch[1]);
+            else if (line.includes('score mate')) score = line.includes('score mate -') ? -10000 : 10000;
+
+            if (game.turn() !== $('#playerColor').val() && $('#gameMode').val() === 'vsAI') {
+                classifyMove(score);
+                lastEval = score;
+            }
+        }
+
+        function classifyMove(newEval) {
+            const player = $('#playerColor').val();
+            const currentScore = (player === 'w') ? newEval : -newEval;
+            const prevScore = (player === 'w') ? lastEval : -lastEval;
+            
+            const diff = currentScore - prevScore;
+            let label = "", color = "";
+            
+            if (diff > 100) { label = "Brilliant!!"; color = "var(--brilliant)"; }
+            else if (diff > 40) { label = "Great Move"; color = "var(--great)"; }
+            else if (diff > -15) { label = "Best Move"; color = "var(--good)"; }
+            else if (diff > -80) { label = "Inaccuracy"; color = "#f1c40f"; }
+            else if (diff > -200) { label = "Mistake"; color = "var(--mistake)"; }
+            else { label = "Blunder"; color = "var(--blunder)"; }
+            $('#move-eval').html(label).css({'background-color': color, 'display': 'inline-block'});
+        }
+
+        // --- Logika Visual Hint ---
+        function removeHighlights() {
+            $('#myBoard .square-55d63').removeClass('highlight-hint highlight-square');
+        }
+
+        function highlightSquare(square) {
+            $('#myBoard .square-' + square).addClass('highlight-square');
+        }
+
+        function highlightPossibleMoves(square) {
+            // Dapatkan semua langkah yang mungkin dari petak ini
+            var moves = game.moves({
+                square: square,
+                verbose: true
+            });
+
+            if (moves.length === 0) return;
+
+            // Beri hint pada petak asal
+            highlightSquare(square);
+
+            // Beri hint pada setiap petak tujuan
+            for (var i = 0; i < moves.length; i++) {
+                $('#myBoard .square-' + moves[i].to).addClass('highlight-hint');
+            }
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            if (!useTimer) return;
+
+            timerInterval = setInterval(() => {
+                const turn = game.turn();
+                timeLeft[turn]--;
+                $(`#timer-${turn === 'w' ? 'white' : 'black'}`).text(formatTime(timeLeft[turn]));
+
+                if (timeLeft[turn] <= 0) {
+                    clearInterval(timerInterval);
+                    alert(`Waktu habis! ${turn === 'w' ? 'Hitam' : 'Putih'} Menang.`);
+                    updateStatus();
+                }
+            }, 1000);
+        }
+
+        function makeMove(moveStr) {
+            game.move({
+                from: moveStr.substring(0, 2),
+                to: moveStr.substring(2, 4),
+                promotion: moveStr.substring(4) || 'q'
+            });
+            board.position(game.fen());
+            updateStatus();
+            removeHighlights();
+            if (useTimer) startTimer();
+        }
+
+        // Handler untuk klik petak (Click-to-Move)
+        function onSquareClick(square) {
+            // Jika game selesai, abaikan
+            if (game.game_over()) return;
+
+            // Ambil informasi bidak di petak tersebut
+            var piece = game.get(square);
+
+            // Logika VS AI: Pastikan pemain hanya mengklik warnanya sendiri
+            if ($('#gameMode').val() === 'vsAI') {
+                const playerCol = $('#playerColor').val();
+                if (piece && piece.color !== playerCol && squareSelected === null) return;
+            }
+
+            // Jika sudah ada petak yang dipilih sebelumnya
+            if (squareSelected) {
+                // Coba lakukan langkah
+                var move = game.move({
+                    from: squareSelected,
+                    to: square,
+                    promotion: 'q'
+                });
+
+                // Jika langkah valid
+                if (move) {
+                    board.position(game.fen());
+                    updateStatus();
+                    removeHighlights();
+                    squareSelected = null;
+                    
+                    if (useTimer) startTimer();
+
+                    // Minta evaluasi AI
+                    stockfish.postMessage(`position fen ${game.fen()}`);
+                    stockfish.postMessage('go depth 10');
+
+                    if ($('#gameMode').val() === 'vsAI') {
+                        window.setTimeout(makeAIMove, 500);
+                    }
+                    return;
+                }
+            }
+
+            // Jika mengklik bidak yang sama atau petak kosong tanpa tujuan valid, reset
+            removeHighlights();
+
+            // Jika mengklik bidak yang bisa digerakkan (giliran yang benar)
+            if (piece && piece.color === game.turn()) {
+                // Pilih petak baru
+                squareSelected = square;
+                highlightPossibleMoves(square);
+            } else {
+                squareSelected = null;
+            }
+        }
+
+        function onDragStart (source, piece) {
+            if (game.game_over()) return false;
+            
+            // Mode VS AI
+            if ($('#gameMode').val() === 'vsAI') {
+                const playerCol = $('#playerColor').val();
+                if ((playerCol === 'w' && piece.search(/^b/) !== -1) ||
+                    (playerCol === 'b' && piece.search(/^w/) !== -1)) return false;
+            }
+            
+            // Hilangkan hint lama saat mulai drag
+            removeHighlights();
+            highlightPossibleMoves(source);
+        }
+
+        function onDrop (source, target) {
+            var move = game.move({ from: source, to: target, promotion: 'q' });
+            if (move === null) {
+                removeHighlights();
+                return 'snapback';
+            }
+
+            updateStatus();
+            removeHighlights();
+            squareSelected = null;
+            if (useTimer) startTimer();
+
+            stockfish.postMessage(`position fen ${game.fen()}`);
+            stockfish.postMessage('go depth 10'); 
+            
+            if ($('#gameMode').val() === 'vsAI') {
+                window.setTimeout(makeAIMove, 500);
+            }
+        }
+
+        function makeAIMove() {
+            if (game.game_over() || game.turn() === $('#playerColor').val()) return;
+            const diffVal = $('#difficulty').val();
+            const diff = diffVal === 'easy' ? {s:0, d:2} : (diffVal === 'hard' ? {s:20, d:12} : {s:10, d:8});
+            stockfish.postMessage(`setoption name Skill Level value ${diff.s}`);
+            stockfish.postMessage(`position fen ${game.fen()}`);
+            stockfish.postMessage(`go depth ${diff.d}`);
+        }
+
+        function updateStatus () {
+            const turn = game.turn() === 'w' ? 'Putih' : 'Hitam';
+            let status = game.in_checkmate() ? `Skakmat! ${turn} kalah.` : 
+                         game.in_draw() ? "Permainan Seri!" : `Giliran: ${turn}`;
+            if (!game.game_over() && game.in_check()) status += " (SKAK!)";
+
+            $('#status').html(status);
+            $('#pgn').html(game.pgn());
+            $('.timer').removeClass('active');
+            $(`#timer-${game.turn() === 'w' ? 'white' : 'black'}`).addClass('active');
+        }
+
+        function startGame() {
+            const pColor = $('#playerColor').val();
+            const gMode = $('#gameMode').val();
+            const tControl = $('#timeControl').val();
+            const diff = $('#difficulty').val();
+
+            $('#setup-overlay').css('opacity', '0');
+            setTimeout(() => $('#setup-overlay').hide(), 500);
+            $('#main-container').css('opacity', '1');
+
+            game.reset();
+            board.orientation(pColor === 'w' ? 'white' : 'black');
+            board.start();
+            lastEval = 0;
+            squareSelected = null;
+            $('#move-eval').hide();
+            removeHighlights();
+
+            $('#active-settings').html(`Mode: ${gMode === 'vsAI' ? 'vs AI ('+diff+')' : 'Multiplayer'} | Warna: ${pColor === 'w' ? 'Putih' : 'Hitam'}`);
+
+            if (tControl === 'none') {
+                useTimer = false;
+                $('.timer').text('00:00').removeClass('active');
+            } else {
+                useTimer = true;
+                const secs = parseInt(tControl);
+                timeLeft = { w: secs, b: secs };
+                $('.timer').text(formatTime(secs));
+            }
+
+            updateStatus();
+            if (pColor === 'b' && gMode === 'vsAI') window.setTimeout(makeAIMove, 500);
+        }
+
+        // Event Handler
+        $('#gameMode').on('change', function() {
+            if (this.value === 'multiplayer') $('#difficulty-setup').hide();
+            else $('#difficulty-setup').show();
+        });
+
+        $('#startGameBtn').on('click', startGame);
+        
+        $('#resetBtn').on('click', () => {
+            clearInterval(timerInterval);
+            $('#main-container').css('opacity', '0');
+            $('#setup-overlay').show().css('opacity', '1');
+        });
+
+        $('#undoBtn').on('click', () => { 
+            game.undo(); 
+            if($('#gameMode').val() === 'vsAI') game.undo(); 
+            board.position(game.fen()); 
+            updateStatus(); 
+            $('#move-eval').hide();
+            removeHighlights();
+            squareSelected = null;
+        });
+
+        // Inisialisasi Papan dengan listener klik tambahan
+        board = Chessboard('myBoard', {
+            draggable: true,
+            position: 'start',
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            onSnapEnd: () => board.position(game.fen()),
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+        });
+
+        // Tambahkan event click ke setiap petak papan
+        $(document).on('click', '#myBoard .square-55d63', function() {
+            var square = $(this).attr('data-square');
+            onSquareClick(square);
+        });
+
+        initStockfish();
+        $(window).resize(board.resize);
+    </script>
+</body>
+</html>
